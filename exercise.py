@@ -1,4 +1,5 @@
 """
+    FAISAL Exercise
     We want to setup a processing pipeline that would accept a list of jobs
     (computing tasks) from multiple users and run these jobs on the compute
     server and email the results back to the users. The two main desired
@@ -30,6 +31,7 @@
 """
 
 from pdb import set_trace
+from numpy import argmin
 from wsgiref.simple_server import make_server
 from email.mime.text import MIMEText
 from urllib.parse import parse_qs
@@ -65,16 +67,16 @@ def application(environ, start_response):
         request_body_size = 0
     request_body = environ['wsgi.input'].read(request_body_size)
     GET_request = parse_qs(request_body)
-    raw_n = GET_request.get(b'n', '')
-    n = raw_n[1:-1].decode('UTF-8')
-    raw_email = GET_request.get(b'email', '')
-    email = int(raw_email.decode('UTF-8'))
+    raw_n = GET_request.get(b'n', [''])[0]
+    raw_email = GET_request.get(b'email', [''])[0]
     response_body = [str.encode(html)]
-    if n not in [None, ''] and email not in [None, '']:
+    empties = [None, [''], '']
+    if raw_n not in empties and raw_email not in empties:
+        email = raw_email.decode('UTF-8')
+        n = int(raw_n.decode('UTF-8'))
         my_process_input = process_input(n, email)
         try:
             jobs.put(my_process_input)
-            print(my_process_input._n)
             response_body = [b"job submission succeeded"]
         except:
             response_body = [b"job submission failed"]    
@@ -92,10 +94,9 @@ class process_input(object):
         self._email = email
 
 class Worker(threading.Thread):
-    def __init__(self, input_queue, output_queue):
+    def __init__(self, input_queue):
         self._email_server = smtplib.SMTP('localhost')
         self._input_queue = input_queue
-        self._output_queue = output_queue
         threading.Thread.__init__(self)
     @staticmethod
     def compose(x, myresult):
@@ -117,8 +118,34 @@ class Worker(threading.Thread):
                 msg_body = Worker.compose(n, answer)
                 self.sendEmail(email, msg_body)
 
+class Supervisor(object):
+    def __init__(self, num_workers, limit_jobs_per_worker):
+        # initialize the number of Workers
+        self._num_workers = num_workers
+        self._limit_jobs_per_worker = limit_jobs_per_worker
+        self._workers = list()
+        self._input_queues = list()        
+        for i in range(0, num_workers):
+            self._input_queues.append(Queue(maxsize=limit_jobs_per_worker))
+            myinputqueue = input_queues[-1]
+            self._workers.append(Worker(myinputqueue))
+            self._workers[-1].run()
+        self.manage()
+    def manage(self):
+        while True:  # get a job
+            myjob = jobs.get()
+            if myjob is not None:
+                break
+        num_jobs_of_workers = [0]*self._num_workers
+        for i in range(0, self._num_workers):
+            num_jobs_in_workers[i] = self._input_queues[i].qsize()
+        least_full_worker_index = argmin(num_jobs_per_worker)
+        job_limit = self._limit_jobs_per_worker
+        if self._input_queues[least_full_worker_index].qsize < job_limit:
+            self._input_queues[least_full_worker_index].put(myjob)
+        ### TODO ADD SETUP SO THAT IF ONE IS EMPTY, THE MOST FULL  QUEUE FEEDS IT
+
 if __name__ == '__main__':
-    results = Queue()
     jobs = Queue()
     IP = '127.0.0.1'  # localhost
     PORT = 8000  # arbitrary non-priveliged port
@@ -126,5 +153,3 @@ if __name__ == '__main__':
     MAX_JOBS_PER_THREAD = 3  # k
     server = make_server(IP, PORT, application)
     server.serve_forever()
-
-
