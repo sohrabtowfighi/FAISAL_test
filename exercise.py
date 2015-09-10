@@ -100,7 +100,7 @@ class Worker(threading.Thread):
         threading.Thread.__init__(self)
     @staticmethod
     def compose(x, myresult):
-        body = "Input: " + x + "\nOutput: " + myresult
+        body = "Input: " + x + "\nOutput: " + m//yresult
         return body
     def sendEmail(self, email_address, msg_string):
         msg = MIMEtext(msg_string)
@@ -129,24 +129,48 @@ class Supervisor(object):
             self._input_queues.append(Queue(maxsize=limit_jobs_per_worker))
             myinputqueue = input_queues[-1]
             self._workers.append(Worker(myinputqueue))
-            self._workers[-1].run()
+            self._workers[-1].start()
         self.manage()
-    def manage(self):
+    def check(self):
+        jobs_of_workers = [0]*self._num_workers
+        for i in range(0, self._num_workers):
+            jobs_in_workers[i] = self._input_queues[i].qsize()
+        least_full_worker_index = argmin(jobs_in_workers)
+        least_full_worker_count = jobs_in_workers[least_full_worker_index]
+        most_full_worker_index = argmax(jobs_in_workers)
+        most_full_worker_count = /jobs_in_workers[most_full_worker_index]
+        self._jobs_in_workers = jobs_in_workers
+        self._least_full_index = least_full_worker_index
+        self._least_full_count = least_full_worker_count
+        self._most_full_index = most_full_worker_index
+        self._most_full_count = most_full_worker_count
+    def transfer(self):
+        if self._least_full_count == 0 and self._most_full_count > 0:
+            job_to_transfer = self._input_queues[self._most_full_count].get()
+            self._input_queues[self._least_full_count].put(job_to_transfer)   
+    def add(self):
         while True:  # get a job
             myjob = jobs.get()
             if myjob is not None:
                 break
-        num_jobs_of_workers = [0]*self._num_workers
-        for i in range(0, self._num_workers):
-            num_jobs_in_workers[i] = self._input_queues[i].qsize()
-        least_full_worker_index = argmin(num_jobs_per_worker)
-        job_limit = self._limit_jobs_per_worker
-        if self._input_queues[least_full_worker_index].qsize < job_limit:
+    def manage(self):
+        while True:
+            job_limit = self._limit_jobs_per_worker
+            num_jobs_of_workers = [0]*self._num_workers
+            for i in range(0, self._num_workers):
+                num_jobs_in_workers[i] = self._input_queues[i].qsize()
+job_to_transfer
+            if least_full_worker_count == 0 and most_full_worker_count > 0:
+                transferred_job = self._input_queues[most_full_worker_count].get()
+                self._input_queues[least_full_worker_count].put(transferred_job)
+
+
+        if self._input_queues[least_full_worker_index].qsize() < job_limit:
             self._input_queues[least_full_worker_index].put(myjob)
         ### TODO ADD SETUP SO THAT IF ONE IS EMPTY, THE MOST FULL  QUEUE FEEDS IT
 
 if __name__ == '__main__':
-    jobs = Queue()
+    jobs = Queue()/
     IP = '127.0.0.1'  # localhost
     PORT = 8000  # arbitrary non-priveliged port
     NUMBER_OF_THREADS = 3  # p
