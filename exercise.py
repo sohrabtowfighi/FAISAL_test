@@ -144,31 +144,32 @@ class Supervisor(object):
         self._least_full_count = least_full_worker_count
         self._most_full_index = most_full_worker_index
         self._most_full_count = most_full_worker_count
+    def isFull(self):
+        for i in range(0, self._num_workers):
+            if self._jobs_in_workers[i] < self._limit_jobs_per_worker:
+                return False
+        return True
     def transfer(self):
         if self._least_full_count == 0 and self._most_full_count > 0:
             job_to_transfer = self._input_queues[self._most_full_count].get()
-            self._input_queues[self._least_full_count].put(job_to_transfer)   
+            self._input_queues[self._least_full_count].put(job_to_transfer)
+            return True
+        return False
     def add(self):
-        while True:  # get a job
+        while True:  # loop until receive a job
             myjob = jobs.get()
             if myjob is not None:
-                break
+                break            
+        self._input_queues[self._least_full_index].put(myjob)
     def manage(self):
-        while True:
-            job_limit = self._limit_jobs_per_worker
-            num_jobs_of_workers = [0]*self._num_workers
-            for i in range(0, self._num_workers):
-                num_jobs_in_workers[i] = self._input_queues[i].qsize()
-job_to_transfer
-            if least_full_worker_count == 0 and most_full_worker_count > 0:
-                transferred_job = self._input_queues[most_full_worker_count].get()
-                self._input_queues[least_full_worker_count].put(transferred_job)
-
-
-        if self._input_queues[least_full_worker_index].qsize() < job_limit:
-            self._input_queues[least_full_worker_index].put(myjob)
-        ### TODO ADD SETUP SO THAT IF ONE IS EMPTY, THE MOST FULL  QUEUE FEEDS IT
-
+        while True:  # manage the Workers indefinitely
+            self.check()
+            isTransfer = self.transfer()
+            if isTransfer == True:
+                self.check()            
+            if not self.isFull():
+                self.add()
+        
 if __name__ == '__main__':
     jobs = Queue()/
     IP = '127.0.0.1'  # localhost
