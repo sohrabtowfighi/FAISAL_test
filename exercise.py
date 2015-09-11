@@ -40,7 +40,10 @@ from queue import Queue
 from time import sleep
 from threading import Timer, Thread
 import smtplib
+# for testing
 import unittest
+import imaplib
+import urllib2
 
 html = """
 <html>
@@ -186,11 +189,33 @@ class WebServer(object):
         self._server_thread = Thread(target=self._server.serve_forever)
         self._server_thread.start()
 
+# for testing
 
+def submitJobToWebPortal(url, n, email):
+    #email = 'test.faisal.receive@gmail.com'
+    #password = 'medicalimaging'    
+    form_data = {'n': n, 'email': email}   
+    data = urllib.urlencode(form_data)
+    response = urllib2.urlopen(url, params)
+    data = response.read()
+    return data
+
+def checkCountInbox():
+    obj = imaplib.IMAP4_SSL('imap.gmail.com','993')
+    obj.login('username','password')
+    obj.select()
+    res = obj.search(None,'UnSeen')
+    set_trace()
+    return len(res)
+
+def emptyInbox():
+    
 
 class Tests(unittest.TestCase):
   def test_simultaneous(self):
-      self.assertEqual('foo'.upper(), 'FOO')
+      NUMBER_USERS = z = 10
+      for i in range(0, z):
+          Thread
 
   def test_isupper(self):
       self.assertTrue('FOO'.isupper())
