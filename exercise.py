@@ -35,7 +35,7 @@ from pdb import set_trace
 from numpy import argmin, argmax
 from wsgiref.simple_server import make_server
 from email.mime.text import MIMEText
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode
 from queue import Queue
 from time import sleep
 from threading import Timer, Thread
@@ -43,7 +43,7 @@ import smtplib
 # for testing
 import unittest
 import imaplib
-import urllib2
+from urllib.request import urlopen
 
 html = """
 <html>
@@ -191,42 +191,41 @@ class WebServer(object):
 
 # for testing
 
-def submitJobToWebPortal(url, n, email):
+def submitJobToWebPortal(url, n, email, count=1):
     #email = 'test.faisal.receive@gmail.com'
     #password = 'medicalimaging'    
     form_data = {'n': n, 'email': email}   
-    data = urllib.urlencode(form_data)
-    response = urllib2.urlopen(url, params)
-    data = response.read()
+    data = urlencode(form_data)   
+    data = data.encode('UTF-8')
+    for i in range(0, count):
+        response = urlopen(url, data)
+        data = response.read()
     return data
 
-def checkCountInbox():
-    obj = imaplib.IMAP4_SSL('imap.gmail.com','993')
-    obj.login('username','password')
-    obj.select()
+def countInbox(gmail, password):
+    imap = imaplib.IMAP4('imap.gmail.com')
+    imap.login(gmail, password)
+    imap.select()
     res = obj.search(None,'UnSeen')
     set_trace()
     return len(res)
 
-def emptyInbox():
-    
+def emptyInbox(gmail, password):
+    imap = imaplib.IMAP4_SSL('imap.gmail.com','587')
+    imap.login(gmail, password)
+    typ, data = imap.search(None, 'ALL')
+    for num in data[0].split():
+        imap.store(msg_no, '+FLAGS', '\\Deleted')
 
 class Tests(unittest.TestCase):
-  def test_simultaneous(self):
+  def test_users(self):
       NUMBER_USERS = z = 10
       for i in range(0, z):
-          Thread
-
-  def test_isupper(self):
-      self.assertTrue('FOO'.isupper())
-      self.assertFalse('Foo'.isupper())
-
-  def test_split(self):
-      s = 'hello world'
-      self.assertEqual(s.split(), ['hello', 'world'])
-      # check that s.split fails when the separator is not a string
-      with self.assertRaises(TypeError):
-          s.split(2)
+          Thread()
+  def test_job_list_length(self):
+      pass
+  def test_job_time_duration(self):
+      pass
 
 if __name__ == '__main__':
     jobs = Queue()
@@ -239,3 +238,7 @@ if __name__ == '__main__':
     mySchedule = schedule(interval, mySupervisor)
     myServer = WebServer(IP, PORT, application)
     
+    RECEIVING = 'test.faisal.receive@gmail.com'
+    RECEIVINGPASS = 'medicalimaging'
+    submitJobToWebPortal('http://127.0.0.1:8000', 2, RECEIVING)
+    countInbox(RECEIVING, RECEIVINGPASS)
