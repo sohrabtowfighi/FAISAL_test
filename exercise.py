@@ -29,13 +29,13 @@
     input and they should be able to run readily on the compute server without 
     any dependencies.
 """
-
 from pdb import set_trace
-from numpy import argmin
+from numpy import argmin, argmax
 from wsgiref.simple_server import make_server
 from email.mime.text import MIMEText
 from urllib.parse import parse_qs
 from queue import Queue
+from time import sleep
 import threading
 import smtplib
 
@@ -95,21 +95,32 @@ class process_input(object):
 
 class Worker(threading.Thread):
     def __init__(self, input_queue):
-        self._email_server = smtplib.SMTP('localhost')
         self._input_queue = input_queue
         threading.Thread.__init__(self)
     @staticmethod
     def compose(x, myresult):
         body = "Input: " + x + "\nOutput: " + m//yresult
         return body
-    def sendEmail(self, email_address, msg_string):
-        msg = MIMEtext(msg_string)
-        msg['Subject'] = msg_string
-        msg['From'] = 'FAISAL_noreply@sfu.ca'
-        msg['To'] = email_address
-        self._email_server.send_message(msg)
+    def sendEmail(self, recipient_email_address, msg_string):
+        sender_email_address = 'test.faisal.noreply@gmail.com'
+        sender_email_password = 'medicalimaging'    
+        server = smtplib.SMTP()
+        server.connect('smtp.gmail.com', 3109)
+        server.ehlo()
+        server.starttls()
+        server.login(sender_email_address, sender_email_password) 
+        subject = 'FAISAL Query'        
+        msgbody = '\r\n'.join(['To: %s' % recipient_email_address,
+                            'From: %s' % sender_email_address,
+                            'Subject: %s' % subject,
+                            '', msgstring])    
+        print(msgbody)
+        server.sendmail(sender_email_password, [recipient_email_address], 
+                        msgbody) 
+        server.quit()
     def run(self):
         while True:
+            print('hi')
             myinput = self._input_queue.get()
             n = myinput._n
             email = myinput._email
@@ -127,18 +138,17 @@ class Supervisor(object):
         self._input_queues = list()        
         for i in range(0, num_workers):
             self._input_queues.append(Queue(maxsize=limit_jobs_per_worker))
-            myinputqueue = input_queues[-1]
+            myinputqueue = self._input_queues[-1]
             self._workers.append(Worker(myinputqueue))
             self._workers[-1].start()
-        self.manage()
     def check(self):
-        jobs_of_workers = [0]*self._num_workers
+        jobs_in_workers = [0]*self._num_workers
         for i in range(0, self._num_workers):
             jobs_in_workers[i] = self._input_queues[i].qsize()
         least_full_worker_index = argmin(jobs_in_workers)
         least_full_worker_count = jobs_in_workers[least_full_worker_index]
         most_full_worker_index = argmax(jobs_in_workers)
-        most_full_worker_count = /jobs_in_workers[most_full_worker_index]
+        most_full_worker_count = jobs_in_workers[most_full_worker_index]
         self._jobs_in_workers = jobs_in_workers
         self._least_full_index = least_full_worker_index
         self._least_full_count = least_full_worker_count
@@ -156,25 +166,42 @@ class Supervisor(object):
             return True
         return False
     def add(self):
-        while True:  # loop until receive a job
-            myjob = jobs.get()
-            if myjob is not None:
-                break            
+        myjob = jobs.get()
         self._input_queues[self._least_full_index].put(myjob)
     def manage(self):
-        while True:  # manage the Workers indefinitely
             self.check()
             isTransfer = self.transfer()
             if isTransfer == True:
-                self.check()            
-            if not self.isFull():
+                self.check() 
+            while not self.isFull() and jobs.qsize() > 0:
+                print('hello')
                 self.add()
-        
+
+class Scheduler(object):
+    def __init__(self, p, k):
+        self._k = k
+        self._p = p
+        self._mysupervisor = Supervisor(p,k)        
+        self._timer_manager = threading.Timer(1, self._mysupervisor.manage)
+        self._timer_manager.start()
+        self._timer_print = threading.Timer(1, print, args=(jobs.qsize(),))
+        self._timer_print.start()
+
+class WebServer(threading.Thread):
+    def __init__(self, ip, port, app):
+        self._server = make_server(IP, PORT, application)        
+        threading.Thread.__init__(self)
+        self.start()
+    def run(self):
+        print('broni')
+        self._server.serve_forever()
+        print('howdy')
+
 if __name__ == '__main__':
-    jobs = Queue()/
-    IP = '127.0.0.1'  # localhost
-    PORT = 8000  # arbitrary non-priveliged port
-    NUMBER_OF_THREADS = 3  # p
-    MAX_JOBS_PER_THREAD = 3  # k
-    server = make_server(IP, PORT, application)
-    server.serve_forever()
+    jobs = Queue()
+    IP = '127.0.0.1'
+    PORT = 8000
+    NUMBER_OF_THREADS = p = 3  # p
+    MAX_JOBS_PER_THREAD = k = 3  # k
+    myScheduler = Scheduler(p, k)
+    myServer = WebServer(IP, PORT, application)
