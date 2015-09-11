@@ -29,6 +29,8 @@
     input and they should be able to run readily on the compute server without 
     any dependencies.
 """
+
+
 from pdb import set_trace
 from numpy import argmin, argmax
 from wsgiref.simple_server import make_server
@@ -38,6 +40,7 @@ from queue import Queue
 from time import sleep
 from threading import Timer, Thread
 import smtplib
+import unittest
 
 html = """
 <html>
@@ -47,9 +50,9 @@ html = """
 <body>
 <h1>Arithmetic series from 1 to n</h1>
 <form action="/put_job" method="POST">
-    n = <input type="number" name="n">
+    n = <input type="number" name="n" id="n">
     <br/>
-    Your email: <input type="email" name="email">
+    Your email: <input type="email" name="email" id="n">
     <br/>
     <input type="submit">
 </form>
@@ -77,7 +80,6 @@ def application(environ, start_response):
         my_process_input = process_input(n, email)
         try:
             jobs.put(my_process_input)
-            set_trace()
             response_body = [b"job submission succeeded"]
         except:
             response_body = [b"job submission failed"]    
@@ -87,7 +89,6 @@ def arithmetic_series(n):
     result = 0
     for i in range(1, n+1):
         result += i
-    print(result)
     return result
 
 class process_input(object):
@@ -100,15 +101,13 @@ class Worker(Thread):
         self._input_queue = input_queue
         Thread.__init__(self)
     @staticmethod
-    def compose(x, myresult):
-        body = "Input: " + x + "\nOutput: " + myresult
-        print(body)
+    def compose(x, y):
+        body = "Input: " + str(x) + "\nOutput: " + str(y)
         return body
     def sendEmail(self, recipient_email_address, msg_string):
         sender_email_address = 'test.faisal.noreply@gmail.com'
         sender_email_password = 'medicalimaging'    
-        server = smtplib.SMTP()
-        server.connect('smtp.gmail.com', 3109)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
         server.ehlo()
         server.starttls()
         server.login(sender_email_address, sender_email_password) 
@@ -116,14 +115,12 @@ class Worker(Thread):
         msgbody = '\r\n'.join(['To: %s' % recipient_email_address,
                             'From: %s' % sender_email_address,
                             'Subject: %s' % subject,
-                            '', msgstring])    
-        print(msgbody)
+                            '', msg_string])    
         server.sendmail(sender_email_password, [recipient_email_address], 
                         msgbody) 
         server.quit()
     def run(self):
         while True:
-            print('hi')
             myinput = self._input_queue.get()
             n = myinput._n
             email = myinput._email
@@ -172,18 +169,15 @@ class Supervisor(object):
         myjob = jobs.get()
         self._input_queues[self._least_full_index].put(myjob)
     def manage(self):
-            print('hello')
             self.check()
             isTransfer = self.transfer()
             if isTransfer == True:
                 self.check() 
             while not self.isFull() and jobs.qsize() > 0:
-                print('hello')
                 self.add()
 
-def schedule(time_interval, supervisor):  
-       
-    Thread(target=supervisor.manage)    
+def schedule(time_interval, supervisor):
+    supervisor.manage()   
     Timer(time_interval, schedule, args=(time_interval, supervisor)).start()
 
 class WebServer(object):
@@ -192,13 +186,31 @@ class WebServer(object):
         self._server_thread = Thread(target=self._server.serve_forever)
         self._server_thread.start()
 
+
+
+class Tests(unittest.TestCase):
+  def test_simultaneous(self):
+      self.assertEqual('foo'.upper(), 'FOO')
+
+  def test_isupper(self):
+      self.assertTrue('FOO'.isupper())
+      self.assertFalse('Foo'.isupper())
+
+  def test_split(self):
+      s = 'hello world'
+      self.assertEqual(s.split(), ['hello', 'world'])
+      # check that s.split fails when the separator is not a string
+      with self.assertRaises(TypeError):
+          s.split(2)
+
 if __name__ == '__main__':
     jobs = Queue()
     IP = '127.0.0.1'
     PORT = 8000
-    time_step = 1
+    interval = 1  # second
     NUMBER_OF_THREADS = p = 3  # p
     MAX_JOBS_PER_THREAD = k = 3  # k
     mySupervisor = Supervisor(p, k)  
-    mySchedule = schedule(time_step, mySupervisor)
+    mySchedule = schedule(interval, mySupervisor)
     myServer = WebServer(IP, PORT, application)
+    
