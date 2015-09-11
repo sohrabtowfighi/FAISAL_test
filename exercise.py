@@ -11,7 +11,7 @@
         processing threads, where only k serial jobs per thread are allowed. 
         The scheduler script should be run periodically using the cron daemon 
         and check if there is vacancy on the processing threads and submit jobs 
-        to accordingly. The scheduler should behave “optimally” in the sense 
+        to accordingly. The scheduler should behave 'optimally' in the sense 
         that all the p processing threads must be utilized always, unless of 
         course the total number of jobs is less than p.
         
@@ -24,8 +24,8 @@
         3.  Jobs with varying run-times.
         4.  A reasonable choice for p and k.
         
-    NOTE: You are free to choose the “test” jobs on the job lists as you like. 
-    The only restriction is that the “test” jobs cannot expect any further user 
+    NOTE: You are free to choose the 'test' jobs on the job lists as you like. 
+    The only restriction is that the 'test' jobs cannot expect any further user 
     input and they should be able to run readily on the compute server without 
     any dependencies.
 """
@@ -36,7 +36,7 @@ from email.mime.text import MIMEText
 from urllib.parse import parse_qs
 from queue import Queue
 from time import sleep
-import threading
+from threading import Timer, Thread
 import smtplib
 
 html = """
@@ -77,6 +77,7 @@ def application(environ, start_response):
         my_process_input = process_input(n, email)
         try:
             jobs.put(my_process_input)
+            set_trace()
             response_body = [b"job submission succeeded"]
         except:
             response_body = [b"job submission failed"]    
@@ -86,6 +87,7 @@ def arithmetic_series(n):
     result = 0
     for i in range(1, n+1):
         result += i
+    print(result)
     return result
 
 class process_input(object):
@@ -93,13 +95,14 @@ class process_input(object):
         self._n = n
         self._email = email
 
-class Worker(threading.Thread):
+class Worker(Thread):
     def __init__(self, input_queue):
         self._input_queue = input_queue
-        threading.Thread.__init__(self)
+        Thread.__init__(self)
     @staticmethod
     def compose(x, myresult):
-        body = "Input: " + x + "\nOutput: " + m//yresult
+        body = "Input: " + x + "\nOutput: " + myresult
+        print(body)
         return body
     def sendEmail(self, recipient_email_address, msg_string):
         sender_email_address = 'test.faisal.noreply@gmail.com'
@@ -169,6 +172,7 @@ class Supervisor(object):
         myjob = jobs.get()
         self._input_queues[self._least_full_index].put(myjob)
     def manage(self):
+            print('hello')
             self.check()
             isTransfer = self.transfer()
             if isTransfer == True:
@@ -177,31 +181,24 @@ class Supervisor(object):
                 print('hello')
                 self.add()
 
-class Scheduler(object):
-    def __init__(self, p, k):
-        self._k = k
-        self._p = p
-        self._mysupervisor = Supervisor(p,k)        
-        self._timer_manager = threading.Timer(1, self._mysupervisor.manage)
-        self._timer_manager.start()
-        self._timer_print = threading.Timer(1, print, args=(jobs.qsize(),))
-        self._timer_print.start()
+def schedule(time_interval, supervisor):  
+       
+    Thread(target=supervisor.manage)    
+    Timer(time_interval, schedule, args=(time_interval, supervisor)).start()
 
-class WebServer(threading.Thread):
+class WebServer(object):
     def __init__(self, ip, port, app):
-        self._server = make_server(IP, PORT, application)        
-        threading.Thread.__init__(self)
-        self.start()
-    def run(self):
-        print('broni')
-        self._server.serve_forever()
-        print('howdy')
+        self._server = make_server(IP, PORT, application)
+        self._server_thread = Thread(target=self._server.serve_forever)
+        self._server_thread.start()
 
 if __name__ == '__main__':
     jobs = Queue()
     IP = '127.0.0.1'
     PORT = 8000
+    time_step = 1
     NUMBER_OF_THREADS = p = 3  # p
     MAX_JOBS_PER_THREAD = k = 3  # k
-    myScheduler = Scheduler(p, k)
+    mySupervisor = Supervisor(p, k)  
+    mySchedule = schedule(time_step, mySupervisor)
     myServer = WebServer(IP, PORT, application)
