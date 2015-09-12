@@ -173,7 +173,6 @@ class Worker(Process):
 
 class Supervisor(object):
     def __init__(self, num_workers, limit_jobs_per_worker):
-        # initialize the number of Workers
         self._num_workers = num_workers
         self._limit_jobs_per_worker = limit_jobs_per_worker
         self._workers = list()
@@ -191,8 +190,6 @@ class Supervisor(object):
         least_full_worker_count = jobs_in_workers[least_full_worker_index]
         most_full_worker_index = argmax(jobs_in_workers)
         most_full_worker_count = jobs_in_workers[most_full_worker_index]
-        if most_full_worker_count > self._limit_jobs_per_worker:
-            raise Exception
         self._jobs_in_workers = jobs_in_workers
         self._least_full_index = least_full_worker_index
         self._least_full_count = least_full_worker_count
@@ -243,7 +240,8 @@ def countInbox(gmail, password, port):
     indices =  str(res[1][0], 'utf-8').split()
     imap.close()
     imap.logout()
-    return len(indices)
+    number_unread_messages = len(indices)
+    return number_unread_messages
 
 def emptyInbox(gmail, password, port):
     imap = imaplib.IMAP4_SSL('imap.gmail.com', port)
@@ -262,10 +260,10 @@ def miniTestSuite(url, port):
     gmail_port = 993
     num_emails = 10
     time_limit = 100
+    n = 2
     emptyInbox(receive_gmail, password, gmail_port)
     init = countInbox(receive_gmail, password, gmail_port)
-    submitManyJobsToPortal(url + ":" + str(port), 2, receive_gmail, num_emails)
-    # wait a second for gmail to do its work
+    submitManyJobsToPortal(url + ":" + str(port), n, receive_gmail, num_emails)
     time = 0
     while time < time_limit:
         sleep(2)
@@ -290,18 +288,19 @@ class Tests(unittest.TestCase):
     def tearDownClass(self):
         emptyInbox(self._gmail, self._pass, self._gmailport)   
     def test_users(self):
-        NUM_USERS = z = 2
-        NUM_JOBS_IN_SERIAL_PER_USER = y = 2
-        FUNC_INPUT = x = 3
+        num_users = 2
+        jobs_per_user = 10
+        arith_input = 15
         processes = []
-        for i in range(0, z):
+        for i in range(0, num_users):
             processes.append(Process(target=submitManyJobsToPortal, 
-                                     args=(self._url, x, self._gmail, y)))
+                                     args=(self._url, arith_input, 
+                                           self._gmail, jobs_per_user)))
             processes[i].start()
-        # total number of completed jobs should be z*y
+        # total number of completed jobs should be num_users*jobs_per_user
         time = 0
         num_emails = countInbox(self._gmail, self._pass, self._gmailport)
-        while num_emails != z*y:
+        while num_emails != num_users*jobs_per_user:
             sleep(1)
             time += 1
             if time > self._timeout:                
@@ -319,9 +318,9 @@ class Tests(unittest.TestCase):
                     raise TimeoutError("Timeout during test_job_list_length")
             emptyInbox(self._gmail, self._pass, self._gmailport)
     def test_job_time_duration(self):
-        for i in[3, 200000]:
+        for arith_input in [3, 200000]:
             time = 0
-            submitJobToPortal(self._url, i, self._gmail)
+            submitJobToPortal(self._url, arith_input, self._gmail)
             while countInbox(self._gmail, self._pass, self._gmailport) == 0:
                 sleep(1)
                 time += 1
