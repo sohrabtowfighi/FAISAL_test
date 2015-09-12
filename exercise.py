@@ -32,18 +32,16 @@
     input and they should be able to run readily on the compute server without 
     any dependencies.
 """
-
-
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from threading import Timer, Thread
 from time import sleep
 from pdb import set_trace
 from numpy import argmin, argmax
 from wsgiref.simple_server import make_server
 from email.mime.text import MIMEText
 from urllib.parse import parse_qs, urlencode
-from queue import Queue
+#from queue import Queue
 from time import sleep
-from threading import Timer, Thread
 import smtplib
 # for testing
 import unittest
@@ -68,9 +66,6 @@ html = """
 </body>
 </html>
 """
-
-class ParameterError(Exception):
-    pass
 
 def application(environ, start_response):
     # https://www.python.org/dev/peps/pep-0333/
@@ -99,6 +94,12 @@ def application(environ, start_response):
             response_body = [b"job submission failed"]    
     return response_body
 
+class WebServer(object):
+    def __init__(self, ip, port, app):
+        self._server = make_server(IP, PORT, application)
+        self._server_thread = Process(target=self._server.serve_forever)
+        self._server_thread.start()
+        
 def arithmetic_series(n):
     result = 0
     try:
@@ -113,9 +114,9 @@ class process_input(object):
         self._n = n
         self._email = email
 
-class Worker(Thread):
+class Worker(Process):
     def __init__(self, input_queue):
-        Thread.__init__(self)
+        Process.__init__(self)
         self._input_queue = input_queue        
     @staticmethod
     def compose(x, y):
@@ -180,8 +181,8 @@ class Supervisor(object):
         return True
     def transfer(self):
         if self._least_full_count == 0 and self._most_full_count > 0:
-            job_to_transfer = self._input_queues[self._most_full_count].get()
-            self._input_queues[self._least_full_count].put(job_to_transfer)
+            job_to_transfer = self._input_queues[self._most_full_index].get()
+            self._input_queues[self._least_full_index].put(job_to_transfer)
             return True
         return False
     def add(self):
@@ -201,21 +202,19 @@ def schedule(time_interval, supervisor):
     supervisor.manage()   
     Timer(time_interval, schedule, args=(time_interval, supervisor)).start()
 
-class WebServer(object):
-    def __init__(self, ip, port, app):
-        self._server = make_server(IP, PORT, application)
-        self._server_thread = Thread(target=self._server.serve_forever)
-        self._server_thread.start()
-
 # for testing
+def submitManyJobsToPortal(url, n, email, count=2):
+    results = []
+    for i in range(0, count):
+        results.append(submitJobToPortal(url, n, email))
+    return results
 
-def submitJobToWebPortal(url, n, email, count=1):
+def submitJobToPortal(url, n, email):
     form_data = {'n': n, 'email': email}
     data = urlencode(form_data)
     data = data.encode('UTF-8')
-    for i in range(0, count):
-        response = urlopen(url, data)
-        data = response.read()
+    response = urlopen(url, data)
+    data = response.read()
     return data
 
 def countInbox(gmail, password):    
@@ -238,6 +237,20 @@ def emptyInbox(gmail, password):
     imap.expunge()
     imap.close()
     imap.logout()
+
+def miniTestSuite():        
+    RECEIVING = 'test.faisal.receive@gmail.com'
+    RECEIVINGPASS = 'medicalimaging'   
+    emptyInbox(RECEIVING, RECEIVINGPASS)
+    init = countInbox(RECEIVING, RECEIVINGPASS)    
+    submitManyJobsToPortal('http://127.0.0.1:8000', 2, RECEIVING, 15)
+    # wait a second for gmail to do its work
+    sleep(5)
+    post_submit = countInbox(RECEIVING, RECEIVINGPASS)    
+    emptyInbox(RECEIVING, RECEIVINGPASS)
+    post_empty = countInbox(RECEIVING, RECEIVINGPASS)
+    assert post_submit == 15
+    print("If no Assertion Error, Passed miniTestSuite")    
     
 class Tests(unittest.TestCase):
     _port = 8000  # due to unittest.main(), cannot pass port as an arg
@@ -247,23 +260,15 @@ class Tests(unittest.TestCase):
     _timeout = 1000              
     def setUp(self):
         emptyInbox(self._gmail, self._pass)   
-    def tearDown(self):
-        print(TIMES)
     def test_users(self):
         NUM_USERS = z = 2
         NUM_JOBS_IN_SERIAL_PER_USER = y = 2
         FUNC_INPUT = x = 3
+        processes = []
         for i in range(0, z):
-            # submit 25 jobs in serial per thread for arithmetic_sum(10)
-            # need to use multiprocessing.Process to bypass GIL so that it is 
-            # even possible for multiple users to be operating concurrently
-            # http://stackoverflow.com/questions/4496680/python-threads-all-executing-on-a-single-core
-            process = Process(target=submitJobToWebPortal, args=(self._url, 
-                                                                 x,
-                                                                 self._gmail, 
-                                                                 y))   
-            process.start()
-            process.join(5)
+            processes.append(Process(target=submitManyJobsToPortal, 
+                                     args=(self._url, x, self._gmail, y)))
+            processes[i].start()
         # total number of completed jobs should be z*y
         time = 0
         num_emails = countInbox(self._gmail, self._pass)
@@ -274,30 +279,27 @@ class Tests(unittest.TestCase):
             if time > self._timeout:                
                 raise TimeoutError("Timeout during test_users")
             num_emails = countInbox(self._gmail, self._pass)
-        TIMES.append({'test_users': time})
-        """
     def test_job_list_length(self):
         # submit 3 jobs, wait. submit 4 jobs, wait... submit 20 jobs, wait.
-        for i in [1]:
-            submitJobToWebPortal(self._url, 10, self._gmail, i)
+        for i in [1, 3, 11]:
+            submitManyJobsToPortal(self._url, 10, self._gmail, i)
             time = 0
-            while countInbox(self._gmail, self._pass) == 0:
+            while countInbox(self._gmail, self._pass) != i:
                 sleep(1)
                 time += 1
                 if time > self._timeout:                    
                     raise TimeoutError("Timeout during test_job_list_length")
-            TIMES.append({'test_job_list_length': time})
+            emptyInbox(self._gmail, self._pass)
     def test_job_time_duration(self):
         for i in[3, 200000]:
             time = 0
-            submitJobToWebPortal(self._url, i, self._gmail)
+            submitJobToPortal(self._url, i, self._gmail)
             while countInbox(self._gmail, self._pass) == 0:
                 sleep(1)
                 time += 1
                 if time > self._timeout:
                     raise TimeoutError("Timeout during test_job_time_duration")
-            TIMES.append({'test_job_time_duration': time})
-"""
+
 
 if __name__ == '__main__':
     jobs = Queue()
@@ -309,13 +311,15 @@ if __name__ == '__main__':
     mySupervisor = Supervisor(p, k)  
     mySchedule = schedule(interval, mySupervisor)
     myServer = WebServer(IP, PORT, application)        
-    TIMES = []
+    
+    
+    
     unittest.main()
 
 """
     RECEIVING = 'test.faisal.receive@gmail.com'
     RECEIVINGPASS = 'medicalimaging'
-    submitJobToWebPortal('http://127.0.0.1:8000', 2, RECEIVING)
+    submitManyJobsToPortal('http://127.0.0.1:8000', 2, RECEIVING, 15)
     # wait a second for gmail to do its work
     before_submit = countInbox(RECEIVING, RECEIVINGPASS)    
     sleep(5)
