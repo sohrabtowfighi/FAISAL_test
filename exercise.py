@@ -63,6 +63,9 @@ html = """
 </html>
 """
 
+class ParameterError(Exception):
+    pass
+
 def application(environ, start_response):
     status = '200 OK'
     headers = [('Content-type', 'text/html; charset=utf-8')]
@@ -234,18 +237,15 @@ class Tests(unittest.TestCase):
         emptyInbox(self._gmail, self._pass)
         for i in range(0, z):
             # submit 100 jobs in serial per thread for arithmetic_sum(10)
-            Thread(target=submitJobToWebPortal, args=(self._url, 
-                                                      10,
-                                                      self._gmail,
-                                                      100))
+            Thread(target=submitJobToWebPortal, args=(self._url, 10,
+                                                      self._gmail, 100))
         # total number of completed jobs should be z*100
         time = 0         
         while countInbox(self._gmail, self._pass) != z*100:
             sleep(1)
             time += 1
             if time > self._timeout:
-                raise Exception("Timeout during test_users")
-        
+                raise TimeoutError("Timeout during test_users")        
     def test_job_list_length(self):
         # submit 3 jobs, wait. submit 4 jobs, wait... submit 20 jobs, wait.
         emptyInbox(self._gmail, self._pass)
@@ -256,17 +256,22 @@ class Tests(unittest.TestCase):
                 sleep(1)
                 time += 1
                 if time > self._timeout:
-                    raise Exception("Timeout during test_job_list_length")                
+                    raise TimeoutError("Timeout during test_job_list_length")                
     def test_job_time_duration(self):
+        emptyInbox(self._gmail, self._pass)        
+        for i in range(3, 20):
+            time = 0
+            submitJobToWebPortal(self._url, i, self._gmail)
+            while countInbox(self._gmail, self._pass) == 0:
+                sleep(1)
+                time += 1
+                if time > self._timeout:
+                    raise TimeoutError("Timeout during test_job_list_length")
         
-        mySupervisor = Supervisor(p, k)  
-        mySchedule = schedule(interval, mySupervisor)
-        myServer = WebServer(IP, PORT, application)
-    
     
 if __name__ == '__main__':
     jobs = Queue()
-    IP = '127.0.0.1'
+    IP = '127.0/.0.1'
     PORT = 8000
     interval = 1  # second
     NUMBER_OF_THREADS = p = 3  # p
@@ -280,6 +285,8 @@ if __name__ == '__main__':
     before_submit = countInbox(RECEIVING, RECEIVINGPASS)
     submitJobToWebPortal('http://127.0.0.1:8000', 2, RECEIVING)
     # wait a second for gmail to do its work
+    unittest.main()    
+    
     sleep(5)
     before_emptying = countInbox(RECEIVING, RECEIVINGPASS)
     emptyInbox(RECEIVING, RECEIVINGPASS)
