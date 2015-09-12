@@ -30,7 +30,7 @@
     any dependencies.
 """
 
-
+from time import sleep
 from pdb import set_trace
 from numpy import argmin, argmax
 from wsgiref.simple_server import make_server
@@ -90,8 +90,11 @@ def application(environ, start_response):
 
 def arithmetic_series(n):
     result = 0
-    for i in range(1, n+1):
-        result += i
+    try:
+        for i in range(1, n+1):
+            result += i
+    except:
+        result = -1
     return result
 
 class process_input(object):
@@ -194,34 +197,41 @@ class WebServer(object):
 def submitJobToWebPortal(url, n, email, count=1):
     #email = 'test.faisal.receive@gmail.com'
     #password = 'medicalimaging'    
-    form_data = {'n': n, 'email': email}   
-    data = urlencode(form_data)   
+    form_data = {'n': n, 'email': email}
+    data = urlencode(form_data)
     data = data.encode('UTF-8')
     for i in range(0, count):
         response = urlopen(url, data)
         data = response.read()
     return data
 
-def countInbox(gmail, password):
-    imap = imaplib.IMAP4('imap.gmail.com')
+def countInbox(gmail, password):    
+    imap = imaplib.IMAP4_SSL('imap.gmail.com')
     imap.login(gmail, password)
     imap.select()
-    res = obj.search(None,'UnSeen')
-    set_trace()
-    return len(res)
+    res = imap.search(None,'UnSeen')
+    indices =  str(res[1][0], 'utf-8').split()
+    return len(indices)
 
 def emptyInbox(gmail, password):
-    imap = imaplib.IMAP4_SSL('imap.gmail.com','587')
+    imap = imaplib.IMAP4_SSL('imap.gmail.com')
     imap.login(gmail, password)
+    imap.select()    
     typ, data = imap.search(None, 'ALL')
     for num in data[0].split():
-        imap.store(msg_no, '+FLAGS', '\\Deleted')
+        imap.store(num, '+FLAGS', '\\Deleted')
+    imap.expunge()
 
 class Tests(unittest.TestCase):
+  def __init__(self):      
+      unittest.TestCase.__init__()
+      self._url = 'http://127.0.0.1:8000'
+      self._gmail = 'test.faisal.receive@gmail.com'
+      self._pass = 'medicalimaging'
   def test_users(self):
       NUMBER_USERS = z = 10
       for i in range(0, z):
-          Thread()
+          Thread(target=submitJobToWebPortal, args=())
   def test_job_list_length(self):
       pass
   def test_job_time_duration(self):
@@ -240,5 +250,13 @@ if __name__ == '__main__':
     
     RECEIVING = 'test.faisal.receive@gmail.com'
     RECEIVINGPASS = 'medicalimaging'
+    before_submit = countInbox(RECEIVING, RECEIVINGPASS)
     submitJobToWebPortal('http://127.0.0.1:8000', 2, RECEIVING)
-    countInbox(RECEIVING, RECEIVINGPASS)
+    # wait a second for gmail to do its work
+    sleep(5)
+    before_emptying = countInbox(RECEIVING, RECEIVINGPASS)
+    emptyInbox(RECEIVING, RECEIVINGPASS)
+    after_emptying = countInbox(RECEIVING, RECEIVINGPASS)
+    print('Count Init ' + str(before_submit))
+    print('Count Post Submit ' + str(before_emptying))
+    print('Count Post Clear ' + str(after_emptying))
