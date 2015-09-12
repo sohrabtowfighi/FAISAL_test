@@ -239,9 +239,9 @@ def miniTestSuite(url, port):
         time += 2
         if countInbox(receive_gmail, password, gmail_port) == num_emails:
             break
-    post_submit = countInbox(receive_gmail, password, gmail_port)    
     emptyInbox(receive_gmail, password, gmail_port)
     post_empty = countInbox(receive_gmail, password, gmail_port)
+    assert post_empty == 0
     print("Passed miniTestSuite")    
     
 class Tests(unittest.TestCase):
@@ -321,7 +321,7 @@ if __name__ == '__main__':
         I am using test.faisal.noreply@gmail.com to send results to users.
         I am using test.faisal.receive@gmail.com to receive emails in the 
         course of automated testing. The password for both is 'medicalimaging'.
-        The automated testing takes about 1 minute. The tests check the 
+        The automated testing takes about 1.5 minutes. The tests check the 
         recipient's email address to make sure the correct number of messages 
         are delivered. Gmail blocks attempts to submit very large number of 
         emails at once but the code is scalable.
