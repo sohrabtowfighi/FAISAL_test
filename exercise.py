@@ -251,23 +251,31 @@ class Tests(unittest.TestCase):
         print(TIMES)
     def test_users(self):
         NUM_USERS = z = 2
-        NUM_JOBS_IN_SERIAL_PER_USER = y = 5
+        NUM_JOBS_IN_SERIAL_PER_USER = y = 2
         FUNC_INPUT = x = 3
         for i in range(0, z):
             # submit 25 jobs in serial per thread for arithmetic_sum(10)
             # need to use multiprocessing.Process to bypass GIL so that it is 
             # even possible for multiple users to be operating concurrently
             # http://stackoverflow.com/questions/4496680/python-threads-all-executing-on-a-single-core
-            Process(target=submitJobToWebPortal, args=(self._url, x,
-                                                      self._gmail, y))
-        # total number of completed jobs should be z*25
+            process = Process(target=submitJobToWebPortal, args=(self._url, 
+                                                                 x,
+                                                                 self._gmail, 
+                                                                 y))   
+            process.start()
+            process.join(5)
+        # total number of completed jobs should be z*y
         time = 0
-        while countInbox(self._gmail, self._pass) != z*y:
+        num_emails = countInbox(self._gmail, self._pass)
+        while num_emails != z*y:
+            print(num_emails)
             sleep(1)
             time += 1
             if time > self._timeout:                
                 raise TimeoutError("Timeout during test_users")
+            num_emails = countInbox(self._gmail, self._pass)
         TIMES.append({'test_users': time})
+        """
     def test_job_list_length(self):
         # submit 3 jobs, wait. submit 4 jobs, wait... submit 20 jobs, wait.
         for i in [1]:
@@ -280,16 +288,16 @@ class Tests(unittest.TestCase):
                     raise TimeoutError("Timeout during test_job_list_length")
             TIMES.append({'test_job_list_length': time})
     def test_job_time_duration(self):
-        for i in range(3, 20):
+        for i in[3, 200000]:
             time = 0
             submitJobToWebPortal(self._url, i, self._gmail)
             while countInbox(self._gmail, self._pass) == 0:
                 sleep(1)
                 time += 1
                 if time > self._timeout:
-                    raise TimeoutError("Timeout during test_job_list_length")
+                    raise TimeoutError("Timeout during test_job_time_duration")
             TIMES.append({'test_job_time_duration': time})
-
+"""
 
 if __name__ == '__main__':
     jobs = Queue()
