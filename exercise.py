@@ -1,5 +1,6 @@
 """
     FAISAL - Sohrab Towfighi
+    September 11, 2015
     
     Instructions:
     We want to setup a processing pipeline that would accept a list of jobs
@@ -32,6 +33,8 @@
     any dependencies.
 """
 
+
+from multiprocessing import Process
 from time import sleep
 from pdb import set_trace
 from numpy import argmin, argmax
@@ -112,8 +115,8 @@ class process_input(object):
 
 class Worker(Thread):
     def __init__(self, input_queue):
-        self._input_queue = input_queue
         Thread.__init__(self)
+        self._input_queue = input_queue        
     @staticmethod
     def compose(x, y):
         body = "Input: " + str(x) + "\nOutput: " + str(y)
@@ -143,6 +146,7 @@ class Worker(Thread):
                 answer = arithmetic_series(n)
                 msg_body = Worker.compose(n, answer)
                 self.sendEmail(email, msg_body)
+        return
 
 class Supervisor(object):
     def __init__(self, num_workers, limit_jobs_per_worker):
@@ -192,8 +196,8 @@ class Supervisor(object):
                 self.add()
 
 def schedule(time_interval, supervisor):
-    # recursive calls to threading.Timer produces (in essence) an indefinitely 
-    # operating timer
+    # recursive calls to threading.Timer produce an indefinitely operating
+    # timer
     supervisor.manage()   
     Timer(time_interval, schedule, args=(time_interval, supervisor)).start()
 
@@ -206,8 +210,6 @@ class WebServer(object):
 # for testing
 
 def submitJobToWebPortal(url, n, email, count=1):
-    #email = 'test.faisal.receive@gmail.com'
-    #password = 'medicalimaging'    
     form_data = {'n': n, 'email': email}
     data = urlencode(form_data)
     data = data.encode('UTF-8')
@@ -222,6 +224,8 @@ def countInbox(gmail, password):
     imap.select()
     res = imap.search(None,'UnSeen')
     indices =  str(res[1][0], 'utf-8').split()
+    imap.close()
+    imap.logout()
     return len(indices)
 
 def emptyInbox(gmail, password):
@@ -232,41 +236,50 @@ def emptyInbox(gmail, password):
     for num in data[0].split():
         imap.store(num, '+FLAGS', '\\Deleted')
     imap.expunge()
-
+    imap.close()
+    imap.logout()
+    
 class Tests(unittest.TestCase):
-    def __init__(self, port):
-        unittest.TestCase.__init__()
-        self._url = 'http://127.0.0.1:' + str(port)        
-        self._gmail = 'test.faisal.receive@gmail.com'
-        self._pass = 'medicalimaging'
-        self._timeout = 20
+    _port = 8000  # due to unittest.main(), cannot pass port as an arg
+    _url = 'http://127.0.0.1:' + str(_port)        
+    _gmail = 'test.faisal.receive@gmail.com'
+    _pass = 'medicalimaging'
+    _timeout = 1000              
+    def setUp(self):
+        emptyInbox(self._gmail, self._pass)   
+    def tearDown(self):
+        print(TIMES)
     def test_users(self):
-        NUMBER_USERS = z = 10
-        emptyInbox(self._gmail, self._pass)
+        NUM_USERS = z = 2
+        NUM_JOBS_IN_SERIAL_PER_USER = y = 5
+        FUNC_INPUT = x = 3
         for i in range(0, z):
-            # submit 100 jobs in serial per thread for arithmetic_sum(10)
-            Thread(target=submitJobToWebPortal, args=(self._url, 10,
-                                                      self._gmail, 100))
-        # total number of completed jobs should be z*100
-        time = 0         
-        while countInbox(self._gmail, self._pass) != z*100:
+            # submit 25 jobs in serial per thread for arithmetic_sum(10)
+            # need to use multiprocessing.Process to bypass GIL so that it is 
+            # even possible for multiple users to be operating concurrently
+            # http://stackoverflow.com/questions/4496680/python-threads-all-executing-on-a-single-core
+            Process(target=submitJobToWebPortal, args=(self._url, x,
+                                                      self._gmail, y))
+        # total number of completed jobs should be z*25
+        time = 0
+        while countInbox(self._gmail, self._pass) != z*y:
             sleep(1)
             time += 1
-            if time > self._timeout:
-                raise TimeoutError("Timeout during test_users")        
+            if time > self._timeout:                
+                raise TimeoutError("Timeout during test_users")
+        TIMES.append({'test_users': time})
     def test_job_list_length(self):
         # submit 3 jobs, wait. submit 4 jobs, wait... submit 20 jobs, wait.
-        emptyInbox(self._gmail, self._pass)
-        for i in range(3, 20):
+        for i in [1]:
             submitJobToWebPortal(self._url, 10, self._gmail, i)
             time = 0
             while countInbox(self._gmail, self._pass) == 0:
                 sleep(1)
                 time += 1
-                if time > self._timeout:
-                    raise TimeoutError("Timeout during test_job_list_length")                
+                if time > self._timeout:                    
+                    raise TimeoutError("Timeout during test_job_list_length")
+            TIMES.append({'test_job_list_length': time})
     def test_job_time_duration(self):
-        emptyInbox(self._gmail, self._pass)
         for i in range(3, 20):
             time = 0
             submitJobToWebPortal(self._url, i, self._gmail)
@@ -275,21 +288,21 @@ class Tests(unittest.TestCase):
                 time += 1
                 if time > self._timeout:
                     raise TimeoutError("Timeout during test_job_list_length")
+            TIMES.append({'test_job_time_duration': time})
 
 
 if __name__ == '__main__':
     jobs = Queue()
-    IP = '127.0/.0.1'
+    IP = '127.0.0.1'
     PORT = 8000
     interval = 1  # second
     NUMBER_OF_THREADS = p = 3  # p
     MAX_JOBS_PER_THREAD = k = 3  # k
     mySupervisor = Supervisor(p, k)  
     mySchedule = schedule(interval, mySupervisor)
-    myServer = WebServer(IP, PORT, application)    
+    myServer = WebServer(IP, PORT, application)        
+    TIMES = []
     unittest.main()
-
-
 
 """
     RECEIVING = 'test.faisal.receive@gmail.com'
