@@ -223,20 +223,47 @@ def emptyInbox(gmail, password):
     imap.expunge()
 
 class Tests(unittest.TestCase):
-  def __init__(self):      
-      unittest.TestCase.__init__()
-      self._url = 'http://127.0.0.1:8000'
-      self._gmail = 'test.faisal.receive@gmail.com'
-      self._pass = 'medicalimaging'
-  def test_users(self):
-      NUMBER_USERS = z = 10
-      for i in range(0, z):
-          Thread(target=submitJobToWebPortal, args=())
-  def test_job_list_length(self):
-      pass
-  def test_job_time_duration(self):
-      pass
-
+    def __init__(self):      
+        unittest.TestCase.__init__()
+        self._url = 'http://127.0.0.1:8000'
+        self._gmail = 'test.faisal.receive@gmail.com'
+        self._pass = 'medicalimaging'
+        self._timeout = 20
+    def test_users(self):
+        NUMBER_USERS = z = 10
+        emptyInbox(self._gmail, self._pass)
+        for i in range(0, z):
+            # submit 100 jobs in serial per thread for arithmetic_sum(10)
+            Thread(target=submitJobToWebPortal, args=(self._url, 
+                                                      10,
+                                                      self._gmail,
+                                                      100))
+        # total number of completed jobs should be z*100
+        time = 0         
+        while countInbox(self._gmail, self._pass) != z*100:
+            sleep(1)
+            time += 1
+            if time > self._timeout:
+                raise Exception("Timeout during test_users")
+        
+    def test_job_list_length(self):
+        # submit 3 jobs, wait. submit 4 jobs, wait... submit 20 jobs, wait.
+        emptyInbox(self._gmail, self._pass)
+        for i in range(3, 20):
+            submitJobToWebPortal(self._url, 10, self._gmail, i)
+            time = 0
+            while countInbox(self._gmail, self._pass) == 0:
+                sleep(1)
+                time += 1
+                if time > self._timeout:
+                    raise Exception("Timeout during test_job_list_length")                
+    def test_job_time_duration(self):
+        
+        mySupervisor = Supervisor(p, k)  
+        mySchedule = schedule(interval, mySupervisor)
+        myServer = WebServer(IP, PORT, application)
+    
+    
 if __name__ == '__main__':
     jobs = Queue()
     IP = '127.0.0.1'
