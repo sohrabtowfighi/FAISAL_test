@@ -17,7 +17,7 @@
 
 # 1. Imports
 from multiprocessing import Process, Queue
-from threading import Timer, Thread
+from threading import Timer
 from time import sleep
 from pdb import set_trace
 from numpy import argmin, argmax
