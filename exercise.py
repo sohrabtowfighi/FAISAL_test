@@ -32,6 +32,22 @@
     input and they should be able to run readily on the compute server without 
     any dependencies.
 """
+
+"""
+    Contents:
+    1. Imports
+    2. HTML
+    3. Data Pipeline
+        3a. Functions
+        3b. Classes
+    4. Automated Testing
+        4a. Functions
+        4b. Class
+    5. Main
+    6. Notes
+"""
+
+# 1. Imports
 from multiprocessing import Process, Queue
 from threading import Timer, Thread
 from time import sleep
@@ -40,7 +56,6 @@ from numpy import argmin, argmax
 from wsgiref.simple_server import make_server
 from email.mime.text import MIMEText
 from urllib.parse import parse_qs, urlencode
-#from queue import Queue
 from time import sleep
 import smtplib
 # for testing
@@ -48,7 +63,7 @@ import unittest
 import imaplib
 from urllib.request import urlopen
 
-
+# 2. HTML
 html = """
 <html>
     <head>
@@ -67,6 +82,7 @@ html = """
 </html>
 """
 
+# 3a Data Pipeline Functions
 def application(environ, start_response):
     # https://www.python.org/dev/peps/pep-0333/
     # PEP 0333 -- Python Web Server Gateway Interface v1.0
@@ -93,13 +109,7 @@ def application(environ, start_response):
         except:
             response_body = [b"job submission failed"]    
     return response_body
-
-class WebServer(object):
-    def __init__(self, ip, port, app):
-        self._server = make_server(IP, PORT, application)
-        self._server_thread = Process(target=self._server.serve_forever)
-        self._server_thread.start()
-        
+    
 def arithmetic_series(n):
     result = 0
     try:
@@ -108,6 +118,19 @@ def arithmetic_series(n):
     except:
         result = -1
     return result
+
+def schedule(time_interval, supervisor):
+    # recursive calls to threading.Timer produce an indefinitely operating
+    # timer
+    supervisor.manage()   
+    Timer(time_interval, schedule, args=(time_interval, supervisor)).start()
+
+# 3b Data Pipeline Classes
+class WebServer(object):
+    def __init__(self, ip, port, app):
+        self._server = make_server(IP, PORT, application)
+        self._server_process = Process(target=self._server.serve_forever)
+        self._server_process.start()
 
 class process_input(object):
     def __init__(self, n, email):
@@ -169,6 +192,8 @@ class Supervisor(object):
         least_full_worker_count = jobs_in_workers[least_full_worker_index]
         most_full_worker_index = argmax(jobs_in_workers)
         most_full_worker_count = jobs_in_workers[most_full_worker_index]
+        if most_full_worker_count > self._limit_jobs_per_worker:
+            raise Exception
         self._jobs_in_workers = jobs_in_workers
         self._least_full_index = least_full_worker_index
         self._least_full_count = least_full_worker_count
@@ -195,12 +220,6 @@ class Supervisor(object):
                 self.check() 
             while not self.isFull() and jobs.qsize() > 0:
                 self.add()
-
-def schedule(time_interval, supervisor):
-    # recursive calls to threading.Timer produce an indefinitely operating
-    # timer
-    supervisor.manage()   
-    Timer(time_interval, schedule, args=(time_interval, supervisor)).start()
 
 # for testing
 def submitManyJobsToPortal(url, n, email, count=2):
@@ -238,29 +257,38 @@ def emptyInbox(gmail, password, port):
     imap.close()
     imap.logout()
 
-def miniTestSuite():        
-    RECEIVING = 'test.faisal.receive@gmail.com'
-    RECEIVINGPASS = 'medicalimaging'   
-    gmailport = 993
-    emptyInbox(RECEIVING, RECEIVINGPASS, gmailport)
-    init = countInbox(RECEIVING, RECEIVINGPASS, gmailport)    
-    submitManyJobsToPortal('http://127.0.0.1:8000', 2, RECEIVING, 15)
+def miniTestSuite(url, port):           
+    receive_gmail = 'test.faisal.receive@gmail.com'
+    password = 'medicalimaging'   
+    gmail_port = 993
+    num_emails = 10
+    time_limit = 100
+    emptyInbox(receive_gmail, password, gmail_port)
+    init = countInbox(receive_gmail, password, gmail_port)
+    submitManyJobsToPortal(url + ":" + str(port), 2, receive_gmail, num_emails)
     # wait a second for gmail to do its work
-    sleep(5)
-    post_submit = countInbox(RECEIVING, RECEIVINGPASS, gmailport)    
-    emptyInbox(RECEIVING, RECEIVINGPASS, gmailport)
-    post_empty = countInbox(RECEIVING, RECEIVINGPASS, gmailport)
-    assert post_submit == 15
-    print("If no Assertion Error, Passed miniTestSuite")    
+    time = 0
+    while time < time_limit:
+        sleep(2)
+        time += 2
+        if countInbox(receive_gmail, password, gmail_port) == num_emails:
+            break
+    post_submit = countInbox(receive_gmail, password, gmail_port)    
+    emptyInbox(receive_gmail, password, gmail_port)
+    post_empty = countInbox(receive_gmail, password, gmail_port)
+    print("Passed miniTestSuite")    
     
 class Tests(unittest.TestCase):
-    _port = 8000  # due to unittest.main(), cannot pass port as an arg
+    _port = 8000 
     _gmailport = 993
     _url = 'http://127.0.0.1:' + str(_port)        
     _gmail = 'test.faisal.receive@gmail.com'
     _pass = 'medicalimaging'
     _timeout = 1000                 
     def setUp(self):
+        emptyInbox(self._gmail, self._pass, self._gmailport)   
+    @classmethod
+    def tearDownClass(self):
         emptyInbox(self._gmail, self._pass, self._gmailport)   
     def test_users(self):
         NUM_USERS = z = 2
@@ -281,7 +309,7 @@ class Tests(unittest.TestCase):
                 raise TimeoutError("Timeout during test_users")
             num_emails = countInbox(self._gmail, self._pass, self._gmailport)
     def test_job_list_length(self):
-        job_list_lengths = [1, 3, 11, 50]
+        job_list_lengths = [1, 3, 11]
         for i in job_list_lengths:
             submitManyJobsToPortal(self._url, 10, self._gmail, i)
             time = 0
@@ -306,10 +334,33 @@ if __name__ == '__main__':
     jobs = Queue()
     IP = '127.0.0.1'
     PORT = 8000
-    interval = 1  # second
+    interval = 0.1  # seconds until Supervisor.manage is scheduled to run
     NUMBER_OF_THREADS = p = 3  # p
     MAX_JOBS_PER_THREAD = k = 3  # k
     mySupervisor = Supervisor(p, k)  
     mySchedule = schedule(interval, mySupervisor)
-    myServer = WebServer(IP, PORT, application)            
+    myServer = WebServer(IP, PORT, application)
+    miniTestSuite('http://'+IP, PORT)        
     unittest.main()
+    
+# 6. Notes
+    """            
+        The script runs a localhost webserver.
+        Run the script using 'python3 exercise.py' in terminal
+        Access the site at http://127.0.0.1:8000
+        The job distribution is controlled by Supervisor class' manage method
+        The supervisor manages every interval==0.1 seconds
+        The automated testing unittest.TestCase accounts for the three required
+        situations:    
+            1.  Multiple users simultaneously submitting job lists via the web 
+                interface. - 1 process for each user. On a multi-core system, 
+                it is possible to have concurrent queries submitted to the data 
+                pipeline.
+            2.  Job lists of different lengths.
+            3.  Jobs with varying run-times.
+            4.  A reasonable choice for p and k.
+        The automated testing takes about 1 minute. The test checks the 
+        recipient's email address 'test.faisal.receive@gmail.com' to make sure
+        the correct number of messages are delivered. Gmail blocks attempts to
+        submit very large number of emails at once.
+    """
