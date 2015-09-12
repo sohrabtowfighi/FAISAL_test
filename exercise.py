@@ -217,8 +217,8 @@ def submitJobToPortal(url, n, email):
     data = response.read()
     return data
 
-def countInbox(gmail, password):    
-    imap = imaplib.IMAP4_SSL('imap.gmail.com')
+def countInbox(gmail, password, port):    
+    imap = imaplib.IMAP4_SSL('imap.gmail.com', port)
     imap.login(gmail, password)
     imap.select()
     res = imap.search(None,'UnSeen')
@@ -227,8 +227,8 @@ def countInbox(gmail, password):
     imap.logout()
     return len(indices)
 
-def emptyInbox(gmail, password):
-    imap = imaplib.IMAP4_SSL('imap.gmail.com')
+def emptyInbox(gmail, password, port):
+    imap = imaplib.IMAP4_SSL('imap.gmail.com', port)
     imap.login(gmail, password)
     imap.select()    
     typ, data = imap.search(None, 'ALL')
@@ -241,25 +241,27 @@ def emptyInbox(gmail, password):
 def miniTestSuite():        
     RECEIVING = 'test.faisal.receive@gmail.com'
     RECEIVINGPASS = 'medicalimaging'   
-    emptyInbox(RECEIVING, RECEIVINGPASS)
-    init = countInbox(RECEIVING, RECEIVINGPASS)    
+    gmailport = 993
+    emptyInbox(RECEIVING, RECEIVINGPASS, gmailport)
+    init = countInbox(RECEIVING, RECEIVINGPASS, gmailport)    
     submitManyJobsToPortal('http://127.0.0.1:8000', 2, RECEIVING, 15)
     # wait a second for gmail to do its work
     sleep(5)
-    post_submit = countInbox(RECEIVING, RECEIVINGPASS)    
-    emptyInbox(RECEIVING, RECEIVINGPASS)
-    post_empty = countInbox(RECEIVING, RECEIVINGPASS)
+    post_submit = countInbox(RECEIVING, RECEIVINGPASS, gmailport)    
+    emptyInbox(RECEIVING, RECEIVINGPASS, gmailport)
+    post_empty = countInbox(RECEIVING, RECEIVINGPASS, gmailport)
     assert post_submit == 15
     print("If no Assertion Error, Passed miniTestSuite")    
     
 class Tests(unittest.TestCase):
     _port = 8000  # due to unittest.main(), cannot pass port as an arg
+    _gmailport = 993
     _url = 'http://127.0.0.1:' + str(_port)        
     _gmail = 'test.faisal.receive@gmail.com'
     _pass = 'medicalimaging'
-    _timeout = 1000              
+    _timeout = 1000                 
     def setUp(self):
-        emptyInbox(self._gmail, self._pass)   
+        emptyInbox(self._gmail, self._pass, self._gmailport)   
     def test_users(self):
         NUM_USERS = z = 2
         NUM_JOBS_IN_SERIAL_PER_USER = y = 2
@@ -271,30 +273,29 @@ class Tests(unittest.TestCase):
             processes[i].start()
         # total number of completed jobs should be z*y
         time = 0
-        num_emails = countInbox(self._gmail, self._pass)
+        num_emails = countInbox(self._gmail, self._pass, self._gmailport)
         while num_emails != z*y:
-            print(num_emails)
             sleep(1)
             time += 1
             if time > self._timeout:                
                 raise TimeoutError("Timeout during test_users")
-            num_emails = countInbox(self._gmail, self._pass)
+            num_emails = countInbox(self._gmail, self._pass, self._gmailport)
     def test_job_list_length(self):
-        # submit 3 jobs, wait. submit 4 jobs, wait... submit 20 jobs, wait.
-        for i in [1, 3, 11]:
+        job_list_lengths = [1, 3, 11, 50]
+        for i in job_list_lengths:
             submitManyJobsToPortal(self._url, 10, self._gmail, i)
             time = 0
-            while countInbox(self._gmail, self._pass) != i:
+            while countInbox(self._gmail, self._pass, self._gmailport) != i:
                 sleep(1)
                 time += 1
                 if time > self._timeout:                    
                     raise TimeoutError("Timeout during test_job_list_length")
-            emptyInbox(self._gmail, self._pass)
+            emptyInbox(self._gmail, self._pass, self._gmailport)
     def test_job_time_duration(self):
         for i in[3, 200000]:
             time = 0
             submitJobToPortal(self._url, i, self._gmail)
-            while countInbox(self._gmail, self._pass) == 0:
+            while countInbox(self._gmail, self._pass, self._gmailport) == 0:
                 sleep(1)
                 time += 1
                 if time > self._timeout:
@@ -310,22 +311,5 @@ if __name__ == '__main__':
     MAX_JOBS_PER_THREAD = k = 3  # k
     mySupervisor = Supervisor(p, k)  
     mySchedule = schedule(interval, mySupervisor)
-    myServer = WebServer(IP, PORT, application)        
-    
-    
-    
+    myServer = WebServer(IP, PORT, application)            
     unittest.main()
-
-"""
-    RECEIVING = 'test.faisal.receive@gmail.com'
-    RECEIVINGPASS = 'medicalimaging'
-    submitManyJobsToPortal('http://127.0.0.1:8000', 2, RECEIVING, 15)
-    # wait a second for gmail to do its work
-    before_submit = countInbox(RECEIVING, RECEIVINGPASS)    
-    sleep(5)
-    before_emptying = countInbox(RECEIVING, RECEIVINGPASS)
-    emptyInbox(RECEIVING, RECEIVINGPASS)
-    after_emptying = countInbox(RECEIVING, RECEIVINGPASS)
-    print('Count Init ' + str(before_submit))
-    print('Count Post Submit ' + str(before_emptying))
-    print('Count Post Clear ' + str(after_emptying))"""
