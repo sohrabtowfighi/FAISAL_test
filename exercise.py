@@ -1,5 +1,7 @@
 """
-    FAISAL Exercise
+    FAISAL - Sohrab Towfighi
+    
+    Instructions:
     We want to setup a processing pipeline that would accept a list of jobs
     (computing tasks) from multiple users and run these jobs on the compute
     server and email the results back to the users. The two main desired
@@ -45,6 +47,7 @@ import unittest
 import imaplib
 from urllib.request import urlopen
 
+
 html = """
 <html>
     <head>
@@ -67,6 +70,8 @@ class ParameterError(Exception):
     pass
 
 def application(environ, start_response):
+    # https://www.python.org/dev/peps/pep-0333/
+    # PEP 0333 -- Python Web Server Gateway Interface v1.0
     status = '200 OK'
     headers = [('Content-type', 'text/html; charset=utf-8')]
     start_response(status, headers)
@@ -122,10 +127,11 @@ class Worker(Thread):
         server.login(sender_email_address, sender_email_password) 
         subject = 'FAISAL Query'        
         msgbody = '\r\n'.join(['To: %s' % recipient_email_address,
-                            'From: %s' % sender_email_address,
-                            'Subject: %s' % subject,
-                            '', msg_string])    
-        server.sendmail(sender_email_password, [recipient_email_address], 
+                               'From: %s' % sender_email_address,
+                               'Subject: %s' % subject,
+                               '', msg_string])    
+        server.sendmail(sender_email_password, 
+                        [recipient_email_address], 
                         msgbody) 
         server.quit()
     def run(self):
@@ -186,6 +192,8 @@ class Supervisor(object):
                 self.add()
 
 def schedule(time_interval, supervisor):
+    # recursive calls to threading.Timer produces (in essence) an indefinitely 
+    # operating timer
     supervisor.manage()   
     Timer(time_interval, schedule, args=(time_interval, supervisor)).start()
 
@@ -226,9 +234,9 @@ def emptyInbox(gmail, password):
     imap.expunge()
 
 class Tests(unittest.TestCase):
-    def __init__(self):      
+    def __init__(self, port):
         unittest.TestCase.__init__()
-        self._url = 'http://127.0.0.1:8000'
+        self._url = 'http://127.0.0.1:' + str(port)        
         self._gmail = 'test.faisal.receive@gmail.com'
         self._pass = 'medicalimaging'
         self._timeout = 20
@@ -258,7 +266,7 @@ class Tests(unittest.TestCase):
                 if time > self._timeout:
                     raise TimeoutError("Timeout during test_job_list_length")                
     def test_job_time_duration(self):
-        emptyInbox(self._gmail, self._pass)        
+        emptyInbox(self._gmail, self._pass)
         for i in range(3, 20):
             time = 0
             submitJobToWebPortal(self._url, i, self._gmail)
@@ -267,8 +275,8 @@ class Tests(unittest.TestCase):
                 time += 1
                 if time > self._timeout:
                     raise TimeoutError("Timeout during test_job_list_length")
-        
-    
+
+
 if __name__ == '__main__':
     jobs = Queue()
     IP = '127.0/.0.1'
@@ -278,19 +286,21 @@ if __name__ == '__main__':
     MAX_JOBS_PER_THREAD = k = 3  # k
     mySupervisor = Supervisor(p, k)  
     mySchedule = schedule(interval, mySupervisor)
-    myServer = WebServer(IP, PORT, application)
-    
+    myServer = WebServer(IP, PORT, application)    
+    unittest.main()
+
+
+
+"""
     RECEIVING = 'test.faisal.receive@gmail.com'
     RECEIVINGPASS = 'medicalimaging'
-    before_submit = countInbox(RECEIVING, RECEIVINGPASS)
     submitJobToWebPortal('http://127.0.0.1:8000', 2, RECEIVING)
     # wait a second for gmail to do its work
-    unittest.main()    
-    
+    before_submit = countInbox(RECEIVING, RECEIVINGPASS)    
     sleep(5)
     before_emptying = countInbox(RECEIVING, RECEIVINGPASS)
     emptyInbox(RECEIVING, RECEIVINGPASS)
     after_emptying = countInbox(RECEIVING, RECEIVINGPASS)
     print('Count Init ' + str(before_submit))
     print('Count Post Submit ' + str(before_emptying))
-    print('Count Post Clear ' + str(after_emptying))
+    print('Count Post Clear ' + str(after_emptying))"""
