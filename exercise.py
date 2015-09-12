@@ -1,38 +1,7 @@
 """
-    FAISAL - Sohrab Towfighi
+    FAISAL Submission - Sohrab Towfighi
     September 12, 2015
     
-    Instructions:
-    We want to setup a processing pipeline that would accept a list of jobs
-    (computing tasks) from multiple users and run these jobs on the compute
-    server and email the results back to the users. The two main desired
-    features of the processing pipeline are:
-    
-    1.  Webpage for getting the job lists from the users along with their 
-        personal information.
-    2.  A scheduler script written in BASH, that submits the jobs to p 
-        processing threads, where only k serial jobs per thread are allowed. 
-        The scheduler script should be run periodically using the cron daemon 
-        and check if there is vacancy on the processing threads and submit jobs 
-        to accordingly. The scheduler should behave 'optimally' in the sense 
-        that all the p processing threads must be utilized always, unless of 
-        course the total number of jobs is less than p.
-        
-    You are required to implement the above processing pipeline and 
-    successfully demonstrate its working under the following conditions:
-    
-        1.  Multiple users simultaneously submitting job lists via the web 
-            interface.
-        2.  Job lists of different lengths.
-        3.  Jobs with varying run-times.
-        4.  A reasonable choice for p and k.
-        
-    NOTE: You are free to choose the 'test' jobs on the job lists as you like. 
-    The only restriction is that the 'test' jobs cannot expect any further user 
-    input and they should be able to run readily on the compute server without 
-    any dependencies.
-
-
     Contents:
     1. Imports
     2. HTML
@@ -291,13 +260,12 @@ class Tests(unittest.TestCase):
         num_users = 2
         jobs_per_user = 10
         arith_input = 15
-        processes = []
+        users = []
         for i in range(0, num_users):
-            processes.append(Process(target=submitManyJobsToPortal, 
+            users.append(Process(target=submitManyJobsToPortal, 
                                      args=(self._url, arith_input, 
                                            self._gmail, jobs_per_user)))
-            processes[i].start()
-        # total number of completed jobs should be num_users*jobs_per_user
+            users[i].start()
         time = 0
         num_emails = countInbox(self._gmail, self._pass, self._gmailport)
         while num_emails != num_users*jobs_per_user:
@@ -318,7 +286,7 @@ class Tests(unittest.TestCase):
                     raise TimeoutError("Timeout during test_job_list_length")
             emptyInbox(self._gmail, self._pass, self._gmailport)
     def test_job_time_duration(self):
-        for arith_input in [3, 200000]:
+        for arith_input in [3, 200000, int(2E7)]:
             time = 0
             submitJobToPortal(self._url, arith_input, self._gmail)
             while countInbox(self._gmail, self._pass, self._gmailport) == 0:
@@ -333,8 +301,8 @@ if __name__ == '__main__':
     IP = '127.0.0.1'
     PORT = 8000
     interval = 0.1  # seconds until Supervisor.manage is scheduled to run
-    NUMBER_OF_THREADS = p = 3  # p
-    MAX_JOBS_PER_THREAD = k = 3  # k
+    NUMBER_OF_PROCESSES = p = 3  # p
+    MAX_JOBS_PER_PROCESS = k = 3  # k
     mySupervisor = Supervisor(p, k)  
     mySchedule = schedule(interval, mySupervisor)
     myServer = WebServer(IP, PORT, application)
@@ -343,22 +311,18 @@ if __name__ == '__main__':
     
 # 6. Notes
     """            
-        The script runs a localhost webserver.
-        Run the script using 'python3 exercise.py' in terminal
-        Access the site at http://127.0.0.1:8000
-        The job distribution is controlled by Supervisor class' manage method
-        The supervisor manages every interval==0.1 seconds
-        The automated testing unittest.TestCase accounts for the three required
-        situations:    
-            1.  Multiple users simultaneously submitting job lists via the web 
-                interface. - 1 process for each user. On a multi-core system, 
-                it is possible to have concurrent queries submitted to the data 
-                pipeline.
-            2.  Job lists of different lengths.
-            3.  Jobs with varying run-times.
-            4.  A reasonable choice for p and k.
-        The automated testing takes about 1 minute. The test checks the 
-        recipient's email address 'test.faisal.receive@gmail.com' to make sure
-        the correct number of messages are delivered. Gmail blocks attempts to
-        submit very large number of emails at once.
+        The script runs a localhost webserver. Run the script using 
+        'python3 exercise.py' in terminal. Access the site at 
+        'http://127.0.0.1:8000'. The job distribution is controlled by the 
+        Supervisor class' manage method. The supervisor manages every 
+        interval==0.1 seconds. I am using multiprocessing.Process instead of 
+        threading.Thread because the global interpreter lock in Python prevents
+        the simultaneous execution of multiple threads. 
+        I am using test.faisal.noreply@gmail.com to send results to users.
+        I am using test.faisal.receive@gmail.com to receive emails in the 
+        course of automated testing. The password for both is 'medicalimaging'.
+        The automated testing takes about 1 minute. The tests check the 
+        recipient's email address to make sure the correct number of messages 
+        are delivered. Gmail blocks attempts to submit very large number of 
+        emails at once but the code is scalable.
     """
