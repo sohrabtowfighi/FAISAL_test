@@ -101,12 +101,18 @@ class WebServer(object):
         self._server_process = Process(target=self._server.serve_forever)
         self._server_process.start()
 
+class Emailer(object):
+    def __init__(self, input_queue):
+        self._emailer = EmailWorker(input_queue)
+        self._emailer.start()
+
 class process_input(object):
     def __init__(self, n, email):
         self._n = n
         self._email = email
+        self._arith_series = 0
 
-class Worker(Process):
+class EmailWorker(Process):
     def __init__(self, input_queue):
         Process.__init__(self)
         self._input_queue = input_queue        
@@ -114,48 +120,70 @@ class Worker(Process):
     def compose(x, y):
         body = "Input: " + str(x) + "\nOutput: " + str(y)
         return body
+    def connectEmail(self):
+        self._sender_email_address = 'test.faisal.noreply2@gmail.com'
+        self._sender_email_password = 'medicalimaging'    
+        self._server = smtplib.SMTP('smtp.gmail.com', 587)
+        self._server.ehlo()
+        self._server.starttls()
+        self._server.login(self._sender_email_address, 
+                           self._sender_email_password) 
+    def disconnectEmail(self):
+        self._server.quit()                
     def sendEmail(self, recipient_email_address, msg_string):
-        sender_email_address = 'test.faisal.noreply@gmail.com'
-        sender_email_password = 'medicalimaging'    
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.ehlo()
-        server.starttls()
-        server.login(sender_email_address, sender_email_password) 
         subject = 'FAISAL Query'        
         msgbody = '\r\n'.join(['To: %s' % recipient_email_address,
-                               'From: %s' % sender_email_address,
+                               'From: %s' % self._sender_email_address,
                                'Subject: %s' % subject,
                                '', msg_string])    
-        server.sendmail(sender_email_password, 
+        self._server.sendmail(self._sender_email_password, 
                         [recipient_email_address], 
                         msgbody) 
-        server.quit()
+    def run(self):
+        self.connectEmail()        
+        while True:
+            myinput = self._input_queue.get()
+            if myinput is not None:
+                n = myinput._n
+                arith_series = myinput._arith_series
+                email = myinput._email
+                message = EmailWorker.compose(n, arith_series)
+                self.sendEmail(email, message)
+        return        
+                
+class Worker(Process):
+    def __init__(self, input_queue, output_queue):
+        Process.__init__(self)
+        self._input_queue = input_queue        
+        self._output_queue = output_queue
     def run(self):
         while True:
             myinput = self._input_queue.get()
-            n = myinput._n
-            email = myinput._email
             if myinput is not None:
-                answer = arithmetic_series(n)
-                msg_body = Worker.compose(n, answer)
-                self.sendEmail(email, msg_body)
+                n = myinput._n
+                myinput._arith_series = arithmetic_series(n)
+                self._output_queue.put(myinput)
         return
 
 class Supervisor(object):
-    def __init__(self, num_workers, limit_jobs_per_worker):
+    def __init__(self, num_workers, limit_jobs_per_worker, input_queue,
+                 output_queue):
         self._num_workers = num_workers
         self._limit_jobs_per_worker = limit_jobs_per_worker
         self._workers = list()
-        self._input_queues = list()        
+        self._workers_queues = list()      
+        self._input_queue = input_queue
+        self._output_queue = output_queue
         for i in range(0, num_workers):
-            self._input_queues.append(Queue(maxsize=limit_jobs_per_worker))
-            myinputqueue = self._input_queues[-1]
-            self._workers.append(Worker(myinputqueue))
+            self._workers_queues.append(Queue(maxsize=limit_jobs_per_worker))
+            myinputqueue = self._workers_queues[-1]
+            outputqueue = self._output_queue
+            self._workers.append(Worker(myinputqueue, outputqueue))
             self._workers[-1].start()
     def check(self):
         jobs_in_workers = [0]*self._num_workers
         for i in range(0, self._num_workers):
-            jobs_in_workers[i] = self._input_queues[i].qsize()
+            jobs_in_workers[i] = self._workers_queues[i].qsize()
         least_full_worker_index = argmin(jobs_in_workers)
         least_full_worker_count = jobs_in_workers[least_full_worker_index]
         most_full_worker_index = argmax(jobs_in_workers)
@@ -172,19 +200,19 @@ class Supervisor(object):
         return True
     def transfer(self):
         if self._least_full_count == 0 and self._most_full_count > 0:
-            job_to_transfer = self._input_queues[self._most_full_index].get()
-            self._input_queues[self._least_full_index].put(job_to_transfer)
+            job_to_transfer = self._workers_queues[self._most_full_index].get()
+            self._workers_queues[self._least_full_index].put(job_to_transfer)
             return True
         return False
     def add(self):
-        myjob = jobs.get()
-        self._input_queues[self._least_full_index].put(myjob)
+        myjob = self._input_queue.get()
+        self._workers_queues[self._least_full_index].put(myjob)
     def manage(self):
             self.check()
             isTransfer = self.transfer()
             if isTransfer == True:
                 self.check() 
-            while not self.isFull() and jobs.qsize() > 0:
+            while not self.isFull() and self._input_queue.qsize() > 0:
                 self.add()
 
 # for testing
@@ -259,7 +287,7 @@ class Tests(unittest.TestCase):
         emptyInbox(self._gmail, self._pass, self._gmailport)   
     def test_users(self):
         num_users = 2
-        jobs_per_user = 10
+        jobs_per_user = 2
         arith_input = 15
         users = []
         for i in range(0, num_users):
@@ -270,13 +298,14 @@ class Tests(unittest.TestCase):
         time = 0
         num_emails = countInbox(self._gmail, self._pass, self._gmailport)
         while num_emails != num_users*jobs_per_user:
+            print(num_emails)
             sleep(1)
             time += 1
             if time > self._timeout:                
                 raise TimeoutError("Timeout during test_users")
             num_emails = countInbox(self._gmail, self._pass, self._gmailport)
     def test_job_list_length(self):
-        job_list_lengths = [1, 3, 11]
+        job_list_lengths = [1, 2, 3, 12]
         for i in job_list_lengths:
             submitManyJobsToPortal(self._url, 10, self._gmail, i)
             time = 0
@@ -299,12 +328,14 @@ class Tests(unittest.TestCase):
 
 if __name__ == '__main__':
     jobs = Queue()
+    emails = Queue()
     IP = '127.0.0.1'
     PORT = 8000
     interval = 0.1  # seconds until Supervisor.manage is scheduled to run
     NUMBER_OF_PROCESSES = p = 3  # p
     MAX_JOBS_PER_PROCESS = k = 3  # k
-    mySupervisor = Supervisor(p, k)  
+    myEmailer = Emailer(emails)
+    mySupervisor = Supervisor(p, k, jobs, emails)  
     mySchedule = schedule(interval, mySupervisor)
     myServer = WebServer(IP, PORT, application)
     miniTestSuite('http://'+IP, PORT)        
@@ -319,7 +350,7 @@ if __name__ == '__main__':
         interval==0.1 seconds. I am using multiprocessing.Process instead of 
         threading.Thread because the global interpreter lock in Python prevents
         the simultaneous execution of multiple threads. 
-        I am using test.faisal.noreply@gmail.com to send results to users.
+        I am using test.faisal.noreply2@gmail.com to send results to users.
         I am using test.faisal.receive@gmail.com to receive emails in the 
         course of automated testing. The password for both is 'medicalimaging'.
         The automated testing takes about 1.5 minutes. The tests check the 
