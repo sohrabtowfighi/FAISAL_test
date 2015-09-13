@@ -115,21 +115,19 @@ class process_input(object):
 class EmailWorker(Process):
     def __init__(self, input_queue):
         Process.__init__(self)
-        self._input_queue = input_queue        
+        self._input_queue = input_queue   
     @staticmethod
     def compose(x, y):
         body = "Input: " + str(x) + "\nOutput: " + str(y)
         return body
     def connectEmail(self):
-        self._sender_email_address = 'test.faisal.noreply2@gmail.com'
+        self._sender_email_address = 'test.faisal.noreply1@gmail.com'
         self._sender_email_password = 'medicalimaging'    
         self._server = smtplib.SMTP('smtp.gmail.com', 587)
         self._server.ehlo()
         self._server.starttls()
         self._server.login(self._sender_email_address, 
-                           self._sender_email_password) 
-    def disconnectEmail(self):
-        self._server.quit()                
+                           self._sender_email_password)                 
     def sendEmail(self, recipient_email_address, msg_string):
         subject = 'FAISAL Query'        
         msgbody = '\r\n'.join(['To: %s' % recipient_email_address,
@@ -269,6 +267,7 @@ def miniTestSuite(url, port):
         if countInbox(receive_gmail, password, gmail_port) == num_emails:
             break
     emptyInbox(receive_gmail, password, gmail_port)
+    sleep(1)
     post_empty = countInbox(receive_gmail, password, gmail_port)
     assert post_empty == 0
     print("Passed miniTestSuite")    
@@ -279,15 +278,16 @@ class Tests(unittest.TestCase):
     _url = 'http://127.0.0.1:' + str(_port)        
     _gmail = 'test.faisal.receive@gmail.com'
     _pass = 'medicalimaging'
-    _timeout = 1000                 
+    _timeout = 30                 
     def setUp(self):
         emptyInbox(self._gmail, self._pass, self._gmailport)   
+        sleep(1)
     @classmethod
     def tearDownClass(self):
         emptyInbox(self._gmail, self._pass, self._gmailport)   
     def test_users(self):
-        num_users = 2
-        jobs_per_user = 10
+        num_users = 3
+        jobs_per_user = 2
         arith_input = 15
         users = []
         for i in range(0, num_users):
@@ -349,7 +349,7 @@ if __name__ == '__main__':
         interval==0.1 seconds. I am using multiprocessing.Process instead of 
         threading.Thread because the global interpreter lock in Python prevents
         the simultaneous execution of multiple threads. 
-        I am using test.faisal.noreply2@gmail.com to send results to users.
+        I am using test.faisal.noreply1@gmail.com to send results to users.
         I am using test.faisal.receive@gmail.com to receive emails in the 
         course of automated testing. The password for both is 'medicalimaging'.
         The automated testing takes about 1 minute. The tests check the 
