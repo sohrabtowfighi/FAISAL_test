@@ -287,7 +287,7 @@ class Tests(unittest.TestCase):
         emptyInbox(self._gmail, self._pass, self._gmailport)   
     def test_users(self):
         num_users = 2
-        jobs_per_user = 2
+        jobs_per_user = 10
         arith_input = 15
         users = []
         for i in range(0, num_users):
@@ -298,7 +298,6 @@ class Tests(unittest.TestCase):
         time = 0
         num_emails = countInbox(self._gmail, self._pass, self._gmailport)
         while num_emails != num_users*jobs_per_user:
-            print(num_emails)
             sleep(1)
             time += 1
             if time > self._timeout:                
@@ -353,7 +352,7 @@ if __name__ == '__main__':
         I am using test.faisal.noreply2@gmail.com to send results to users.
         I am using test.faisal.receive@gmail.com to receive emails in the 
         course of automated testing. The password for both is 'medicalimaging'.
-        The automated testing takes about 1.5 minutes. The tests check the 
+        The automated testing takes about 1 minute. The tests check the 
         recipient's email address to make sure the correct number of messages 
         are delivered. Gmail blocks attempts to submit very large number of 
         emails at once but the code is scalable.
