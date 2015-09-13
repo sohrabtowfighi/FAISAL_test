@@ -1,5 +1,6 @@
 """
     FAISAL Submission - Sohrab Towfighi
+    Licence: GNU GPL v3.0
     September 12, 2015
     
     Contents:
